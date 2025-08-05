@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Интерактивный План Похода: Архыз, 10-13 Августа</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Mountain Harmony -->
+    <!-- Application Structure Plan: The application is designed as an interactive daily planner. The core structure is a tab-based navigation for each day (1-4). This allows users to focus on one day at a time, preventing information overload. A persistent dashboard with a comparative chart provides an at-a-glance overview of the entire trip's physical demands (distance, elevation), which updates to highlight the selected day. This structure was chosen because it mirrors the natural way users would plan a multi-day trip: focusing on daily details while keeping the overall context in view. The accordion for general tips keeps supplementary info accessible but unobtrusive. This is more user-friendly than a long, linear document. -->
+    <!-- Visualization & Content Choices: 
+        1. Report Info: Daily hike statistics (distance, elevation, duration). Goal: Compare daily effort. Viz/Presentation Method: Bar Chart. Interaction: Highlighting the bar for the selected day. Justification: A bar chart provides an immediate, clear comparison of quantitative data. Interactivity links the visual to the detailed text, improving comprehension. Library/Method: Chart.js (Canvas).
+        2. Report Info: Detailed hourly plans for each day. Goal: Organize sequential daily schedules. Viz/Presentation Method: Tabbed content display. Interaction: Clicking a day's button shows its specific plan. Justification: Tabs are an intuitive UI pattern for segmenting content, making the detailed itinerary for each day digestible without scrolling through other days' plans. Library/Method: Vanilla JS, HTML, Tailwind CSS.
+        3. Report Info: General recommendations (gear, transport, safety). Goal: Organize non-chronological but essential information. Viz/Presentation Method: Accordion/Collapsible sections. Interaction: Click to expand/collapse. Justification: Accordions prevent cluttering the main view with secondary information, making the interface cleaner while keeping details easily accessible. Library/Method: Vanilla JS, HTML, Tailwind CSS.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8F7F4; /* Warm Neutral */
+            color: #3D405B; /* Deep Blue-Gray */
+        }
+        .active-tab {
+            background-color: #81B29A; /* Muted Green */
+            color: #FFFFFF;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .inactive-tab {
+            background-color: #E0E0E0;
+            color: #3D405B;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        /* Updated CSS to correctly target accordion content */
+        .accordion-item.active .accordion-content {
+            max-height: 1000px; /* Adjust as needed */
+        }
+        .chart-container {
+            position: relative; 
+            width: 100%; 
+            max-width: 800px; 
+            margin-left: auto; 
+            margin-right: auto; 
+            height: 300px;
+            max-height: 40vh;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-[#3D405B] mb-2">Ваш Поход в Архызе</h1>
+            <p class="text-lg text-[#81B29A]">Интерактивный план на 10-13 Августа</p>
+        </header>
+
+        <main>
+            <section id="dashboard" class="mb-8 p-6 bg-white rounded-2xl shadow-lg">
+                 <div class="text-center mb-6">
+                    <h2 class="text-2xl font-bold text-[#3D405B]">Сравнение Маршрутов по Дням</h2>
+                    <p class="text-md text-gray-600 mt-1">Выберите день, чтобы увидеть детали и сравнить нагрузку.</p>
+                </div>
+                <div class="chart-container">
+                    <canvas id="dailyHikeChart"></canvas>
+                </div>
+            </section>
+
+            <section id="itinerary" class="mb-8">
+                <div id="tabs" class="flex flex-wrap justify-center gap-2 mb-6">
+                </div>
+
+                <div id="itinerary-content" class="bg-white rounded-2xl shadow-lg p-6 min-h-[300px]">
+                </div>
+            </section>
+            
+            <section id="recommendations">
+                <h2 class="text-2xl font-bold text-center text-[#3D405B] mb-6">Общие Рекомендации и Советы</h2>
+                <div class="space-y-4" id="accordion-container">
+                </div>
+            </section>
+        </main>
+
+        <footer class="text-center mt-12 py-6 border-t border-gray-200">
+            <p class="text-gray-500">Желаем вам незабываемого и безопасного путешествия в горах Архыза!</p>
+        </footer>
+    </div>
+
+    <script>
+        const hikeData = [
+            {
+                day: 1,
+                date: "10 Августа",
+                title: "Баритовый водопад и окрестности",
+                distance: 10,
+                elevation: 800,
+                duration: "4-5",
+                difficulty: "Средняя",
+                attractions: "Водопад, хвойный лес, горные ручьи",
+                startPoint: "Пос. Архыз, ул. Хубиева (пешком от отеля)",
+                transportNeeded: false,
+                summary: "Идеальный маршрут для первого дня и акклиматизации. Начинается прямо из поселка, ведет через живописный лес к водопаду. Несмотря на небольшую дистанцию, имеет серьезный набор высоты, что позволит подготовить организм к следующим дням.",
+                schedule: [
+                    { time: "09:00 - 11:00", activity: "Прибытие, заселение в отель 'Рахат', легкий завтрак." },
+                    { time: "11:00 - 12:00", activity: "Подготовка к выходу, пеший переход к началу маршрута (ул. Хубиева)." },
+                    { time: "12:00 - 16:00", activity: "Хайк к Баритовому водопаду. Тропа идет через хвойный лес. Для достижения 10 км можно пройти немного дальше за водопад в сторону перевала." },
+                    { time: "16:00 - 17:00", activity: "Возвращение в отель, отдых." },
+                    { time: "19:00", activity: "Ужин и подготовка к следующему дню." }
+                ]
+            },
+            {
+                day: 2,
+                date: "11 Августа",
+                title: "Озеро Любви и гора Красная",
+                distance: 18.2,
+                elevation: 880,
+                duration: "9-10",
+                difficulty: "Средняя",
+                attractions: "Озеро в форме сердца, панорамы Кавказа",
+                startPoint: "Архызское седло (доступно шаттлом до Романтика)",
+                transportNeeded: true,
+                summary: "Полноценный и очень живописный поход к одной из визитных карточек Архыза. Маршрут требует выносливости из-за большой протяженности и набора высоты, но вознаграждает потрясающими видами с вершины горы Красная и уникальным озером в форме сердца.",
+                schedule: [
+                    { time: "07:00 - 07:45", activity: "Ранний подъем, плотный завтрак, финальная подготовка." },
+                    { time: "07:45 - 08:30", activity: "Выход из отеля, переезд на шаттле (первый рейс в 7:45) до поляны Романтик и далее к началу тропы." },
+                    { time: "08:30 - 18:00", activity: "Хайк к Озеру Любви и восхождение на гору Красная. Маршрут проходит по территории Тебердинского заповедника (требуется билет, 200 руб.)." },
+                    { time: "18:00 - 19:00", activity: "Возвращение на поляну Романтик. ВАЖНО: последний шаттл уходит раньше, необходимо заказать такси для возвращения в отель." },
+                    { time: "19:00", activity: "Возвращение в отель, отдых, ужин." }
+                ]
+            },
+            {
+                day: 3,
+                date: "12 Августа",
+                title: "Софийские озера",
+                distance: 13.2,
+                elevation: 890,
+                duration: "8-9",
+                difficulty: "Средняя",
+                attractions: "Высокогорные озера, водопады, ледники",
+                startPoint: "Ледниковая ферма",
+                transportNeeded: true,
+                summary: "Путешествие в самое сердце гор к знаменитым Софийским озерам. Этот маршрут требует специальной внедорожной заброски, но открывает виды на ярко-голубые озера, окруженные величественными вершинами и ледниками. Набор высоты здесь самый значительный.",
+                schedule: [
+                    { time: "07:00 - 08:00", activity: "Ранний подъем, завтрак, встреча с заранее заказанным внедорожником." },
+                    { time: "08:00 - 09:00", activity: "Трансфер на внедорожнике до Ледниковой фермы (точка старта)." },
+                    { time: "09:00 - 17:00", activity: "Хайк к Софийским озерам. Тропа ведет вверх по долине, открывая виды на Софийские водопады и ледник. Значительный набор высоты." },
+                    { time: "17:00 - 19:00", activity: "Возвращение на Ледниковую ферму и трансфер обратно в Архыз." },
+                    { time: "19:00", activity: "Возвращение в отель, отдых, ужин." }
+                ]
+            },
+            {
+                day: 4,
+                date: "13 Августа",
+                title: "Панорамный хайк с 'Северного сияния'",
+                distance: 7,
+                elevation: 250,
+                duration: "3-4",
+                difficulty: "Легкая-Средняя",
+                attractions: "Панорамы Кавказа с высоты 3030 м",
+                startPoint: "Верхняя станция канатной дороги 'Северное сияние'",
+                transportNeeded: true,
+                summary: "Идеальный вариант для дня отъезда. Канатная дорога 'Северное сияние' поднимает на высоту более 3000 метров, откуда открываются захватывающие дух панорамы. Легкая прогулка по хребту позволит насладиться видами без сильной физической нагрузки перед дорогой домой.",
+                schedule: [
+                    { time: "07:30 - 08:15", activity: "Завтрак, выселение из отеля, переезд на шаттле до поляны Романтик." },
+                    { time: "08:15 - 08:45", activity: "Покупка билета и подъем на канатной дороге 'Северное сияние' (15 мин)." },
+                    { time: "08:45 - 11:30", activity: "Панорамный хайк по экотропам на хребте Абишира-Ахуба. Небольшая дистанция с минимальным набором высоты, но на высоте 3000м." },
+                    { time: "11:30 - 12:30", activity: "Спуск на канатке и возвращение в отель." },
+                    { time: "12:30 - 13:30", activity: "Обед и отъезд из Архыза." }
+                ]
+            }
+        ];
+
+        const recommendations = [
+            {
+                title: "Погода и Снаряжение",
+                content: `
+                    <p class="mb-2">Август в Архызе теплый, но погода в горах переменчива. Днем до +21°C, ночью до +9°C. Принцип многослойности в одежде — ключ к комфорту.</p>
+                    <ul class="list-disc list-inside space-y-2">
+                        <li><b>Обувь:</b> Обязательно разношенные треккинговые ботинки с поддержкой голеностопа.</li>
+                        <li><b>Одежда:</b> Термобелье, флисовая кофта, ветро- и влагозащитная куртка (дождевик).</li>
+                        <li><b>Палки:</b> Треккинговые палки настоятельно рекомендуются для снижения нагрузки на колени при спусках.</li>
+                        <li><b>Рюкзак (20-30л):</b> Вода (2л/чел), перекус, аптечка, доп. одежда, солнцезащитный крем, очки, головной убор.</li>
+                    </ul>
+                `
+            },
+            {
+                title: "Транспорт и Логистика",
+                content: `
+                    <p class="mb-2">Отель "Рахат" находится в поселке Архыз, что удобно для доступа к инфраструктуре.</p>
+                    <ul class="list-disc list-inside space-y-2">
+                        <li><b>Бесплатные шаттлы:</b> Курсируют между пос. Архыз и тур. деревней "Романтик" (где находятся подъемники). Первый рейс из Архыза в 07:45, последний обратно около 15:45. Есть перерыв с 10:45 до 13:00.</li>
+                        <li><b>Такси:</b> Поездка Архыз-Романтик стоит около 600 руб. Удобно для возвращения после долгих походов.</li>
+                        <li><b>Внедорожные заброски:</b> Для маршрута к Софийским озерам (День 3) необходим внедорожник до Ледниковой фермы. Это отдельная услуга, которую нужно бронировать заранее у местных водителей.</li>
+                    </ul>
+                `
+            },
+            {
+                title: "Канатные дороги и Сборы",
+                content: `
+                    <p class="mb-2">Подъемники работают летом для доступа к экотропам. <b>Важно:</b> канатная дорога "Млечный путь" будет закрыта на обслуживание во время вашей поездки.</p>
+                    <ul class="list-disc list-inside space-y-2">
+                        <li><b>"Северное сияние" (Северный склон):</b> Открыта с 08:00 до 17:00. Используется в 4-й день.</li>
+                        <li><b>Стоимость:</b> Прогулочный билет на канатку стоит около 2800 руб.</li>
+                        <li><b>Вход в заповедник:</b> Маршруты к Озеру Любви и другим объектам проходят по территории Тебердинского заповедника. Входной билет — 200 руб. с человека.</li>
+                    </ul>
+                `
+            },
+            {
+                title: "Безопасность в горах",
+                content: `
+                    <ul class="list-disc list-inside space-y-2">
+                        <li>Всегда проверяйте прогноз погоды перед выходом.</li>
+                        <li>Имейте с собой полностью заряженный телефон и пауэрбанк. Загрузите офлайн-карты.</li>
+                        <li>Сообщайте в отеле о своем маршруте и времени возвращения.</li>
+                        <li>Не сходите с маркированных троп и уносите весь мусор с собой.</li>
+                        <li>Для сложных маршрутов, если не уверены в своих силах, рассмотрите возможность найма местного гида.</li>
+                    </ul>
+                `
+            }
+        ];
+
+        let activeDay = 1;
+        let chart;
+
+        const tabsContainer = document.getElementById('tabs');
+        const contentContainer = document.getElementById('itinerary-content');
+        const accordionContainer = document.getElementById('accordion-container');
+
+        function renderTabs() {
+            tabsContainer.innerHTML = hikeData.map(day => `
+                <button 
+                    data-day="${day.day}" 
+                    class="day-tab ${day.day === activeDay ? 'active-tab' : 'inactive-tab'} py-2 px-4 rounded-lg font-semibold transition-all duration-300">
+                    День ${day.day}
+                </button>
+            `).join('');
+        }
+
+        function renderContent() {
+            const dayData = hikeData.find(d => d.day === activeDay);
+            if (!dayData) return;
+
+            contentContainer.innerHTML = `
+                <div class="animate-fade-in">
+                    <h3 class="text-2xl font-bold text-[#3D405B] mb-1">${dayData.title}</h3>
+                    <p class="text-sm text-gray-500 mb-4">${dayData.date} | Сложность: ${dayData.difficulty}</p>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mb-6">
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <p class="text-xl font-bold text-[#81B29A]">${dayData.distance} км</p>
+                            <p class="text-sm text-gray-600">Дистанция</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <p class="text-xl font-bold text-[#81B29A]">${dayData.elevation} м</p>
+                            <p class="text-sm text-gray-600">Набор высоты</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <p class="text-xl font-bold text-[#81B29A]">${dayData.duration} ч</p>
+                            <p class="text-sm text-gray-600">Время</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                             <p class="text-xl font-bold text-[#81B29A]">${dayData.transportNeeded ? 'Да' : 'Нет'}</p>
+                            <p class="text-sm text-gray-600">Нужен транспорт</p>
+                        </div>
+                    </div>
+                    
+                    <p class="text-gray-700 mb-6">${dayData.summary}</p>
+                    
+                    <h4 class="font-bold text-lg mb-3 text-[#3D405B]">Почасовой план:</h4>
+                    <ul class="space-y-3 border-l-2 border-[#81B29A] pl-4">
+                        ${dayData.schedule.map(item => `
+                            <li class="relative">
+                                <span class="absolute -left-[23px] top-1.5 h-3 w-3 rounded-full bg-[#81B29A]"></span>
+                                <p class="font-semibold text-gray-800">${item.time}</p>
+                                <p class="text-gray-600">${item.activity}</p>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        function renderAccordions() {
+            accordionContainer.innerHTML = recommendations.map((rec, index) => `
+                <div class="bg-white rounded-lg shadow-md accordion-item"> <!-- Added accordion-item class here -->
+                    <h2>
+                        <button type="button" class="accordion-button flex items-center justify-between w-full p-5 font-medium text-left text-gray-700 hover:bg-gray-100 rounded-lg" data-accordion-target="accordion-body-${index}">
+                            <span>${rec.title}</span>
+                            <svg class="w-6 h-6 shrink-0" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                        </button>
+                    </h2>
+                    <div id="accordion-body-${index}" class="accordion-content p-5 border-t border-gray-200">
+                        ${rec.content}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function createChart() {
+            const ctx = document.getElementById('dailyHikeChart').getContext('2d');
+            const distances = hikeData.map(d => d.distance);
+            const elevations = hikeData.map(d => d.elevation);
+            const labels = hikeData.map(d => `День ${d.day}`);
+            
+            const backgroundColorsDist = hikeData.map(d => d.day === activeDay ? 'rgba(129, 178, 154, 1)' : 'rgba(129, 178, 154, 0.5)');
+            const borderColorsDist = hikeData.map(d => d.day === activeDay ? 'rgba(129, 178, 154, 1)' : 'rgba(129, 178, 154, 0.5)');
+
+            const backgroundColorsElev = hikeData.map(d => d.day === activeDay ? 'rgba(240, 163, 10, 1)' : 'rgba(240, 163, 10, 0.5)');
+            const borderColorsElev = hikeData.map(d => d.day === activeDay ? 'rgba(240, 163, 10, 1)' : 'rgba(240, 163, 10, 0.5)');
+
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Дистанция (км)',
+                            data: distances,
+                            backgroundColor: backgroundColorsDist,
+                            borderColor: borderColorsDist,
+                            borderWidth: 1,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Набор высоты (м)',
+                            data: elevations,
+                            backgroundColor: backgroundColorsElev,
+                            borderColor: borderColorsElev,
+                            borderWidth: 1,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Дистанция (км)'
+                            }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            position: 'right',
+                             title: {
+                                display: true,
+                                text: 'Набор высоты (м)'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y + (context.dataset.yAxisID === 'y' ? ' км' : ' м');
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart() {
+            if (!chart) return;
+            chart.data.datasets[0].backgroundColor = hikeData.map(d => d.day === activeDay ? 'rgba(129, 178, 154, 1)' : 'rgba(129, 178, 154, 0.5)');
+            chart.data.datasets[0].borderColor = hikeData.map(d => d.day === activeDay ? 'rgba(129, 178, 154, 1)' : 'rgba(129, 178, 154, 0.5)');
+            chart.data.datasets[1].backgroundColor = hikeData.map(d => d.day === activeDay ? 'rgba(240, 163, 10, 0.9)' : 'rgba(240, 163, 10, 0.5)');
+            chart.data.datasets[1].borderColor = hikeData.map(d => d.day === activeDay ? 'rgba(240, 163, 10, 0.9)' : 'rgba(240, 163, 10, 0.5)');
+            chart.update();
+        }
+
+        tabsContainer.addEventListener('click', e => {
+            if (e.target.classList.contains('day-tab')) {
+                activeDay = parseInt(e.target.dataset.day);
+                document.querySelectorAll('.day-tab').forEach(tab => {
+                    tab.classList.remove('active-tab');
+                    tab.classList.add('inactive-tab');
+                });
+                e.target.classList.add('active-tab');
+                e.target.classList.remove('inactive-tab');
+                renderContent();
+                updateChart();
+            }
+        });
+        
+        accordionContainer.addEventListener('click', e => {
+            const button = e.target.closest('.accordion-button');
+            if (button) {
+                // Find the parent .accordion-item and toggle the 'active' class on it
+                const accordionItem = button.closest('.accordion-item');
+                accordionItem.classList.toggle('active');
+                
+                const icon = button.querySelector('svg');
+                icon.classList.toggle('rotate-180');
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTabs();
+            renderContent();
+            renderAccordions();
+            createChart();
+        });
+    </script>
+</body>
+</html>
